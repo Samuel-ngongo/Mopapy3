@@ -1,106 +1,88 @@
-
 import streamlit as st
 import numpy as np
-import pandas as pd
-from sklearn.linear_model import LinearRegression
-import os
+from datetime import datetime
 
-st.set_page_config(page_title="Aviator - Super IA Adaptativa", layout="centered")
-st.title("Aviator - Super IA com Análise Avançada e Aprendizado Contínuo")
+st.set_page_config(page_title="Aviator PRO - IA Adaptativa Total", layout="centered")
+st.title("Aviator PRO - IA Inteligente com Padrões, Confiança e Histórico")
 
-# Histórico salvo
-HISTORICO_CSV = "historico_aviator.csv"
-
-# Carregar histórico salvo
-def carregar_dados():
-    if os.path.exists(HISTORICO_CSV):
-        return pd.read_csv(HISTORICO_CSV)["valor"].tolist()
-    return []
-
-# Salvar dados
-def salvar_dados(lista):
-    pd.DataFrame({"valor": lista}).to_csv(HISTORICO_CSV, index=False)
-
-# Sessão inicial
+# Histórico
 if "valores" not in st.session_state:
-    st.session_state.valores = carregar_dados()
+    st.session_state.valores = []
+
+if "historico_completo" not in st.session_state:
+    st.session_state.historico_completo = []
 
 # Entrada de dados
 novo = st.text_input("Insira um valor (ex: 2.31):")
 if st.button("Adicionar") and novo:
     try:
-        val = float(novo)
-        st.session_state.valores.append(val)
-        salvar_dados(st.session_state.valores)
+        valor = float(novo)
+        st.session_state.valores.append(valor)
+        st.session_state.historico_completo.append((valor, datetime.now().strftime("%d/%m/%Y %H:%M")))
         st.success("Valor adicionado.")
     except:
         st.error("Formato inválido.")
 
-# Estimativas inteligentes
-def previsao_avancada(dados):
+# Previsão com média ponderada e confiança
+def prever_valor(dados):
     if len(dados) < 5:
-        return 1.50, 1.60, 30
+        return 1.50, 30
+    pesos = np.linspace(1, 2, len(dados))
+    media_ponderada = np.average(dados, weights=pesos)
+    desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
+    confianca = max(10, 100 - desvio * 100)
+    return round(media_ponderada, 2), round(confianca, 1)
 
-    X = np.arange(len(dados)).reshape(-1, 1)
-    y = np.array(dados)
-    modelo = LinearRegression()
-    modelo.fit(X, y)
-    reg_pred = modelo.predict(np.array([[len(dados)]])).item()
-
-    media_simples = np.mean(dados[-10:])
-    pesos = np.linspace(1, 2, min(len(dados), 10))
-    media_ponderada = np.average(dados[-10:], weights=pesos)
-
-    previsao_final = np.mean([reg_pred, media_simples, media_ponderada])
-
-    desvio = np.std(dados[-10:])
-    confianca = max(10, min(100, 100 - desvio * 90))
-
-    estimativa_min = round(previsao_final - desvio / 2, 2)
-    estimativa_max = round(previsao_final + desvio / 2, 2)
-
-    return estimativa_min, estimativa_max, round(confianca, 1)
-
-def mudou_padrao(dados):
-    if len(dados) < 10:
+# Detectar mudança brusca
+def detectar_mudanca(dados):
+    if len(dados) < 15:
         return False
-
     ultimos = np.array(dados[-5:])
     anteriores = np.array(dados[-10:-5])
     media_diff = abs(np.mean(ultimos) - np.mean(anteriores))
     desvio_diff = abs(np.std(ultimos) - np.std(anteriores))
+    return media_diff > 1.0 or desvio_diff > 1.2
 
-    return media_diff > 0.8 or desvio_diff > 1.0
+# Analisar padrões de repetição
+def analisar_padroes(dados):
+    alertas = []
+    if len(dados) >= 3:
+        ultimos3 = dados[-3:]
+        if all(v < 1.5 for v in ultimos3):
+            alertas.append(("Queda contínua detectada", 70))
+        if all(v > 2.5 for v in ultimos3):
+            alertas.append(("Alta contínua detectada", 65))
+        if len(set(np.sign(np.diff(ultimos3)))) > 1:
+            alertas.append(("Alternância instável", 60))
+    return alertas
 
+# Exibir histórico e análise
 if st.session_state.valores:
     st.subheader("Histórico (últimos 30)")
-    st.write([f"{v:.2f}x" for v in st.session_state.valores[-30:]])
+    for valor, data in st.session_state.historico_completo[-30:]:
+        st.write(f"{valor:.2f}x - {data}")
 
     st.subheader("Previsão e Análise Inteligente")
+    estimativa, confianca = prever_valor(st.session_state.valores)
+    st.info(f"Estimativa para próxima rodada: {estimativa}x")
+    st.info(f"Nível de confiança: {confianca}%")
 
-    est_min, est_max, confianca = previsao_avancada(st.session_state.valores)
-    st.info(f"Estimativa para próxima rodada: entre **{est_min}x** e **{est_max}x**")
-    st.info(f"Probabilidade dentro do intervalo: **{confianca}%**")
-
-    if confianca >= 80:
-        st.success("Alta chance de manter o padrão. Oportunidade favorável.")
-    elif confianca >= 60:
-        st.warning("Padrão moderado. Requer observação.")
+    if confianca >= 75:
+        st.success("Alta confiança nas próximas rodadas.")
+    elif confianca >= 50:
+        st.warning("Confiança moderada. Observe antes de agir.")
     else:
-        st.error("Chance baixa. Mudança de lógica provável.")
+        st.error("Confiança baixa. Alta incerteza.")
 
-    if mudou_padrao(st.session_state.valores):
-        st.warning("Mudança de padrão DETECTADA! IA ajustando estratégia...")
+    if detectar_mudanca(st.session_state.valores):
+        st.warning("Mudança brusca de padrão detectada. IA recalibrando...")
 
-col1, col2 = st.columns(2)
+    padroes = analisar_padroes(st.session_state.valores)
+    for alerta, chance in padroes:
+        st.info(f"Alerta de padrão: {alerta} ({chance}% de chance)")
 
-with col1:
-    if st.button("Limpar histórico"):
-        st.session_state.valores = []
-        if os.path.exists(HISTORICO_CSV):
-            os.remove(HISTORICO_CSV)
-        st.success("Histórico apagado.")
-
-with col2:
-    if st.button("Ver total de registros"):
-        st.info(f"Total de valores registrados: {len(st.session_state.valores)}")
+# Limpar dados
+if st.button("Limpar dados"):
+    st.session_state.valores = []
+    st.session_state.historico_completo = []
+    st.success("Histórico limpo.")
