@@ -1,12 +1,6 @@
 import streamlit as st
 import numpy as np
 from datetime import datetime
-import pandas as pd
-
-try:
-    from sklearn.linear_model import LinearRegression
-except ImportError:
-    LinearRegression = None
 
 st.set_page_config(page_title="Aviator PRO - IA Adaptativa Total", layout="centered")
 st.title("Aviator PRO - IA Inteligente com Padrões, Confiança e Histórico")
@@ -17,6 +11,10 @@ if "valores" not in st.session_state:
 
 if "historico_completo" not in st.session_state:
     st.session_state.historico_completo = []
+
+# Memória de padrões anteriores
+if "memoria_padroes" not in st.session_state:
+    st.session_state.memoria_padroes = []
 
 # Entrada de dados
 novo = st.text_input("Insira um valor (ex: 2.31):")
@@ -29,29 +27,33 @@ if st.button("Adicionar") and novo:
     except:
         st.error("Formato inválido.")
 
-# Previsão com IA híbrida
-def prever_valor(dados):
+# Função de aprendizado contínuo
+def aprendizado_continuo(dados):
     if len(dados) < 5:
-        return 1.50, 30
+        return None  # Não há dados suficientes para aprender ainda
 
-    media_simples = np.mean(dados)
+    # Dividir em blocos de 5 dados
+    blocos = [dados[i:i + 5] for i in range(0, len(dados), 5)]
+    ultimo_bloco = blocos[-1]
+
+    # Ajuste da IA a cada novo bloco
+    media_bloco = np.mean(ultimo_bloco)
+    desvio_bloco = np.std(ultimo_bloco)
+    
+    # Análise de mudanças
+    if desvio_bloco > 0.5:  # Limite ajustável para mudanças significativas
+        return True  # Mudança detectada, IA vai recalibrar
+    return False
+
+# Recalibração automática
+def recalibrar(dados):
+    if len(dados) < 5:
+        return 1.50, 30  # Valor de fallback
     pesos = np.linspace(1, 2, len(dados))
     media_ponderada = np.average(dados, weights=pesos)
-
-    if LinearRegression and len(dados) >= 6:
-        X = np.array(range(len(dados))).reshape(-1, 1)
-        y = np.array(dados)
-        modelo = LinearRegression()
-        modelo.fit(X, y)
-        reg_pred = modelo.predict(np.array([[len(dados) + 1]]))[0]
-    else:
-        reg_pred = media_ponderada
-
-    estimativa_final = (media_simples + media_ponderada + reg_pred) / 3
-    desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
+    desvio = np.std(dados)
     confianca = max(10, 100 - desvio * 100)
-
-    return round(estimativa_final, 2), round(confianca, 1)
+    return round(media_ponderada, 2), round(confianca, 1)
 
 # Detectar mudança brusca
 def detectar_mudanca(dados):
@@ -63,7 +65,7 @@ def detectar_mudanca(dados):
     desvio_diff = abs(np.std(ultimos) - np.std(anteriores))
     return media_diff > 1.0 or desvio_diff > 1.2
 
-# Analisar padrões
+# Analisar padrões de repetição
 def analisar_padroes(dados):
     alertas = []
     if len(dados) >= 3:
@@ -76,36 +78,18 @@ def analisar_padroes(dados):
             alertas.append(("Alternância instável", 60))
     return alertas
 
-# Visualização Interativa (Ponto 3)
-def mostrar_graficos(valores):
-    df = pd.DataFrame({
-        'Índice': list(range(1, len(valores) + 1)),
-        'Valor': valores
-    })
-
-    # Cores por tipo
-    cores = ['red' if v < 1.5 else 'green' if v > 2.5 else 'gray' for v in valores]
-
-    st.subheader("Mini Gráfico de Barras (últimos 10)")
-    ultimos_10 = df.tail(10)
-    st.bar_chart(ultimos_10.set_index('Índice'))
-
-    st.subheader("Evolução da Média")
-    df['Média Móvel'] = df['Valor'].rolling(window=3, min_periods=1).mean()
-    st.line_chart(df.set_index('Índice')[['Valor', 'Média Móvel']])
-
 # Exibir histórico e análise
 if st.session_state.valores:
     st.subheader("Histórico (últimos 30)")
     for valor, data in st.session_state.historico_completo[-30:]:
-        cor = "🟥" if valor < 1.5 else "🟩" if valor > 2.5 else "⬜"
-        st.write(f"{cor} {valor:.2f}x - {data}")
+        st.write(f"{valor:.2f}x - {data}")
 
-    mostrar_graficos(st.session_state.valores)
+    # Análise e previsão
+    if aprendizado_continuo(st.session_state.valores):
+        st.warning("Mudança detectada nos dados. IA recalibrando...")
 
-    st.subheader("Previsão e Análise Inteligente")
-    estimativa, confianca = prever_valor(st.session_state.valores)
-    st.info(f"Estimativa combinada para próxima rodada: {estimativa}x")
+    estimativa, confianca = recalibrar(st.session_state.valores)
+    st.info(f"Estimativa recalibrada: {estimativa}x")
     st.info(f"Nível de confiança: {confianca}%")
 
     if confianca >= 75:
@@ -126,4 +110,5 @@ if st.session_state.valores:
 if st.button("Limpar dados"):
     st.session_state.valores = []
     st.session_state.historico_completo = []
+    st.session_state.memoria_padroes = []
     st.success("Histórico limpo.")
