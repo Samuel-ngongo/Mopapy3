@@ -2,6 +2,11 @@ import streamlit as st
 import numpy as np
 from datetime import datetime
 
+try:
+    from sklearn.linear_model import LinearRegression
+except ImportError:
+    LinearRegression = None
+
 st.set_page_config(page_title="Aviator PRO - IA Adaptativa Total", layout="centered")
 st.title("Aviator PRO - IA Inteligente com Padrões, Confiança e Histórico")
 
@@ -23,15 +28,36 @@ if st.button("Adicionar") and novo:
     except:
         st.error("Formato inválido.")
 
-# Previsão com média ponderada e confiança
+# Previsão com IA híbrida
 def prever_valor(dados):
     if len(dados) < 5:
         return 1.50, 30
+
+    # Média simples
+    media_simples = np.mean(dados)
+
+    # Média ponderada
     pesos = np.linspace(1, 2, len(dados))
     media_ponderada = np.average(dados, weights=pesos)
+
+    # Regressão Linear
+    if LinearRegression and len(dados) >= 6:
+        X = np.array(range(len(dados))).reshape(-1, 1)
+        y = np.array(dados)
+        modelo = LinearRegression()
+        modelo.fit(X, y)
+        reg_pred = modelo.predict(np.array([[len(dados) + 1]]))[0]
+    else:
+        reg_pred = media_ponderada  # fallback
+
+    # Combinar previsões
+    estimativa_final = (media_simples + media_ponderada + reg_pred) / 3
+
+    # Confiança
     desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
     confianca = max(10, 100 - desvio * 100)
-    return round(media_ponderada, 2), round(confianca, 1)
+
+    return round(estimativa_final, 2), round(confianca, 1)
 
 # Detectar mudança brusca
 def detectar_mudanca(dados):
@@ -43,7 +69,7 @@ def detectar_mudanca(dados):
     desvio_diff = abs(np.std(ultimos) - np.std(anteriores))
     return media_diff > 1.0 or desvio_diff > 1.2
 
-# Analisar padrões de repetição
+# Analisar padrões
 def analisar_padroes(dados):
     alertas = []
     if len(dados) >= 3:
@@ -64,7 +90,7 @@ if st.session_state.valores:
 
     st.subheader("Previsão e Análise Inteligente")
     estimativa, confianca = prever_valor(st.session_state.valores)
-    st.info(f"Estimativa para próxima rodada: {estimativa}x")
+    st.info(f"Estimativa combinada para próxima rodada: {estimativa}x")
     st.info(f"Nível de confiança: {confianca}%")
 
     if confianca >= 75:
