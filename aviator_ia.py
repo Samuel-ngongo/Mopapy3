@@ -1,7 +1,12 @@
 import streamlit as st
 import numpy as np
 from datetime import datetime
-from sklearn.linear_model import LinearRegression
+import pandas as pd
+
+try:
+    from sklearn.linear_model import LinearRegression
+except ImportError:
+    LinearRegression = None
 
 st.set_page_config(page_title="Aviator PRO - IA Adaptativa Total", layout="centered")
 st.title("Aviator PRO - IA Inteligente com Padrões, Confiança e Histórico")
@@ -24,38 +29,29 @@ if st.button("Adicionar") and novo:
     except:
         st.error("Formato inválido.")
 
-# Previsão com média ponderada + regressão
-def prever_com_tecnicas(dados):
+# Previsão com IA híbrida
+def prever_valor(dados):
     if len(dados) < 5:
         return 1.50, 30
-    # Média ponderada
+
+    media_simples = np.mean(dados)
     pesos = np.linspace(1, 2, len(dados))
     media_ponderada = np.average(dados, weights=pesos)
 
-    # Regressão linear
-    X = np.arange(len(dados)).reshape(-1, 1)
-    y = np.array(dados)
-    modelo = LinearRegression().fit(X, y)
-    previsao_regressao = modelo.predict([[len(dados)]])[0]
+    if LinearRegression and len(dados) >= 6:
+        X = np.array(range(len(dados))).reshape(-1, 1)
+        y = np.array(dados)
+        modelo = LinearRegression()
+        modelo.fit(X, y)
+        reg_pred = modelo.predict(np.array([[len(dados) + 1]]))[0]
+    else:
+        reg_pred = media_ponderada
 
-    # Combinação (média simples entre as duas técnicas)
-    combinada = (media_ponderada + previsao_regressao) / 2
+    estimativa_final = (media_simples + media_ponderada + reg_pred) / 3
     desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
     confianca = max(10, 100 - desvio * 100)
 
-    return round(combinada, 2), round(confianca, 1)
-
-# Simulação de 3 a 5 rodadas futuras com base no padrão
-def simular_futuro(dados, n=5):
-    simulacoes = []
-    for i in range(1, n + 1):
-        if len(dados) < 5:
-            simulacoes.append(1.50)
-            continue
-        dados_ficticios = dados + simulacoes
-        estimativa, _ = prever_com_tecnicas(dados_ficticios)
-        simulacoes.append(estimativa)
-    return simulacoes
+    return round(estimativa_final, 2), round(confianca, 1)
 
 # Detectar mudança brusca
 def detectar_mudanca(dados):
@@ -67,7 +63,7 @@ def detectar_mudanca(dados):
     desvio_diff = abs(np.std(ultimos) - np.std(anteriores))
     return media_diff > 1.0 or desvio_diff > 1.2
 
-# Analisar padrões de repetição
+# Analisar padrões
 def analisar_padroes(dados):
     alertas = []
     if len(dados) >= 3:
@@ -80,15 +76,36 @@ def analisar_padroes(dados):
             alertas.append(("Alternância instável", 60))
     return alertas
 
+# Visualização Interativa (Ponto 3)
+def mostrar_graficos(valores):
+    df = pd.DataFrame({
+        'Índice': list(range(1, len(valores) + 1)),
+        'Valor': valores
+    })
+
+    # Cores por tipo
+    cores = ['red' if v < 1.5 else 'green' if v > 2.5 else 'gray' for v in valores]
+
+    st.subheader("Mini Gráfico de Barras (últimos 10)")
+    ultimos_10 = df.tail(10)
+    st.bar_chart(ultimos_10.set_index('Índice'))
+
+    st.subheader("Evolução da Média")
+    df['Média Móvel'] = df['Valor'].rolling(window=3, min_periods=1).mean()
+    st.line_chart(df.set_index('Índice')[['Valor', 'Média Móvel']])
+
 # Exibir histórico e análise
 if st.session_state.valores:
     st.subheader("Histórico (últimos 30)")
     for valor, data in st.session_state.historico_completo[-30:]:
-        st.write(f"{valor:.2f}x - {data}")
+        cor = "🟥" if valor < 1.5 else "🟩" if valor > 2.5 else "⬜"
+        st.write(f"{cor} {valor:.2f}x - {data}")
+
+    mostrar_graficos(st.session_state.valores)
 
     st.subheader("Previsão e Análise Inteligente")
-    estimativa, confianca = prever_com_tecnicas(st.session_state.valores)
-    st.info(f"Estimativa combinada: {estimativa}x")
+    estimativa, confianca = prever_valor(st.session_state.valores)
+    st.info(f"Estimativa combinada para próxima rodada: {estimativa}x")
     st.info(f"Nível de confiança: {confianca}%")
 
     if confianca >= 75:
@@ -104,11 +121,6 @@ if st.session_state.valores:
     padroes = analisar_padroes(st.session_state.valores)
     for alerta, chance in padroes:
         st.info(f"Alerta de padrão: {alerta} ({chance}% de chance)")
-
-    st.subheader("Simulação das Próximas Rodadas")
-    simulacoes = simular_futuro(st.session_state.valores, 5)
-    for i, s in enumerate(simulacoes, 1):
-        st.write(f"Rodada +{i}: Estimativa {s}x")
 
 # Limpar dados
 if st.button("Limpar dados"):
