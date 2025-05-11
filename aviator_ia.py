@@ -1,99 +1,121 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 from datetime import datetime
 
-# Inicialização da sessão
-if 'dados' not in st.session_state:
-    st.session_state.dados = []
+# Configuração da página
+st.set_page_config(page_title="Previsão de Queda - Aviator", layout="wide")
+st.title("Previsão de Queda - Aviator")
 
-st.set_page_config(page_title="Aviator PRO IA", layout="centered")
+# Estrutura para armazenar os dados
+if 'valores' not in st.session_state:
+    st.session_state.valores = []
+if 'historico_completo' not in st.session_state:
+    st.session_state.historico_completo = []
 
-# Estilo personalizado
-st.markdown("""
-    <style>
-        .big-font { font-size:24px; font-weight:bold; color:#DAA520; }
-        .emoji { font-size:30px; }
-    </style>
-""", unsafe_allow_html=True)
+# Função para salvar os dados em um arquivo .txt
+def salvar_historico():
+    with open('historico_previsao.txt', 'a') as f:
+        for valor in st.session_state.historico_completo:
+            f.write(f"{valor['data']} - {valor['valor']}\n")
 
-# Cabeçalho
-st.markdown('<div class="big-font">✈️ Aviator PRO IA - Previsão de Quedas</div>', unsafe_allow_html=True)
-st.write("Registe os valores das rodadas, visualize padrões e receba previsões com base em inteligência de dados.")
+# Adicionar valor
+valor = st.text_input("Digite um valor:")
+if st.button("Adicionar"):
+    if valor:
+        valor_float = float(valor)
+        st.session_state.valores.append(valor_float)
+        # Adiciona ao histórico com data
+        data_hora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        st.session_state.historico_completo.append({'data': data_hora, 'valor': valor_float})
+        salvar_historico()
+        st.success(f"Valor {valor_float} adicionado com sucesso!")
 
-# Entrada de nova rodada
-with st.form("entrada_dados"):
-    nova_rodada = st.number_input("Digite o valor da rodada:", min_value=0.01, step=0.01, format="%.2f")
-    enviar = st.form_submit_button("Registrar")
+# Previsão e Lógica de IA Híbrida
+def media_simples(valores):
+    return np.mean(valores)
 
-# Adicionar dados
-if enviar and nova_rodada:
-    st.session_state.dados.append({
-        "Data/Hora": datetime.now().strftime("%d/%m %H:%M:%S"),
-        "Valor": nova_rodada
-    })
+def media_ponderada(valores):
+    pesos = np.arange(1, len(valores) + 1)
+    return np.average(valores, weights=pesos)
 
-# Função para classificar valores
-def classificar(valor):
-    if valor < 2:
-        return "Baixo", "⚠️"
-    elif valor < 10:
-        return "Médio", "✅"
-    else:
-        return "Alto", "🔥"
+def regressao_linear(valores):
+    if len(valores) < 2:
+        return None
+    X = np.array(range(len(valores))).reshape(-1, 1)
+    y = np.array(valores)
+    modelo = LinearRegression()
+    modelo.fit(X, y)
+    previsao = modelo.predict(np.array([[len(valores)]]))
+    return previsao[0]
 
-# Mostrar histórico
-if st.session_state.dados:
-    df = pd.DataFrame(st.session_state.dados)
-    df["Classificação"], df["Emoji"] = zip(*df["Valor"].apply(classificar))
-    st.subheader("Histórico de Rodadas")
-    st.dataframe(df[::-1], use_container_width=True)
+def detectar_mudanca(valores):
+    if len(valores) < 2:
+        return None
+    diff = valores[-1] - valores[-2]
+    if abs(diff) > 1.5:  # Limite de mudança brusca
+        return "Mudança brusca detectada"
+    return "Sem mudança significativa"
 
-    # Gráfico
-    st.subheader("Gráfico das Rodadas")
-    fig, ax = plt.subplots()
-    ax.plot(df["Valor"], marker='o', label="Valor")
-    media_movel = df["Valor"].rolling(window=3).mean()
-    ax.plot(media_movel, linestyle='--', color='orange', label="Média Móvel")
-    ax.set_title("Evolução dos Valores")
-    ax.set_ylabel("Multiplicador")
-    ax.set_xlabel("Rodadas")
+def analisar_padroes(valores):
+    if len(valores) >= 3:
+        if all(v < 1.5 for v in valores[-3:]):
+            return "Queda contínua"
+        elif all(v > 2.5 for v in valores[-3:]):
+            return "Alta contínua"
+        elif (valores[-1] > valores[-2] and valores[-2] < valores[-3]) or (valores[-1] < valores[-2] and valores[-2] > valores[-3]):
+            return "Alternância instável"
+    return "Sem padrão detectado"
+
+# Calculando as previsões
+if len(st.session_state.valores) > 1:
+    previsao_media = media_simples(st.session_state.valores)
+    previsao_ponderada = media_ponderada(st.session_state.valores)
+    previsao_linear = regressao_linear(st.session_state.valores)
+
+    # Detectando mudanças
+    mudanca = detectar_mudanca(st.session_state.valores)
+
+    # Analisando padrões
+    padrao = analisar_padroes(st.session_state.valores)
+
+    st.subheader("Previsões")
+    st.write(f"Média Simples: {previsao_media:.2f}")
+    st.write(f"Média Ponderada: {previsao_ponderada:.2f}")
+    st.write(f"Previsão Linear: {previsao_linear:.2f}")
+    st.write(f"Detecção de Mudança: {mudanca}")
+    st.write(f"Análise de Padrão: {padrao}")
+
+# Exibindo gráficos
+st.subheader("Evolução dos Valores")
+if len(st.session_state.valores) > 1:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(st.session_state.valores, label="Valores", marker='o')
+    ax.set_xlabel('Index')
+    ax.set_ylabel('Valor')
+    ax.set_title('Evolução dos Valores')
     ax.legend()
     st.pyplot(fig)
 
-    # Estatísticas
-    media_simples = round(df["Valor"].mean(), 2)
-    pesos = np.arange(1, len(df)+1)
-    media_ponderada = round(np.average(df["Valor"], weights=pesos), 2)
+    # Gráfico de Média Móvel
+    media_movel = pd.Series(st.session_state.valores).rolling(window=3).mean()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(media_movel, label="Média Móvel", color='orange', linestyle='--')
+    ax.set_xlabel('Index')
+    ax.set_ylabel('Valor')
+    ax.set_title('Média Móvel dos Últimos Valores')
+    ax.legend()
+    st.pyplot(fig)
 
-    st.subheader("Análise Inteligente")
-    st.markdown(f"**Média Simples:** `{media_simples}`")
-    st.markdown(f"**Média Ponderada:** `{media_ponderada}`")
+# Exibindo histórico
+st.subheader("Histórico Completo")
+historico_df = pd.DataFrame(st.session_state.historico_completo)
+st.write(historico_df)
 
-    # IA - Previsão com regressão linear simples
-    def prever_proxima_rodada(valores):
-        if len(valores) < 3:
-            return round(np.mean(valores), 2)
-        x = np.arange(len(valores))
-        y = np.array(valores)
-        coef = np.polyfit(x, y, 1)
-        return round(coef[0] * (len(valores)) + coef[1], 2)
-
-    proxima = prever_proxima_rodada(df["Valor"].tolist())
-    risco, emoji = classificar(proxima)
-
-    st.markdown(f"**Previsão da Próxima Rodada:** `{proxima}` {emoji}")
-    st.markdown(f"**Nível de Risco Previsto:** `{risco}`")
-
-    # Exportar
-    st.download_button("⬇️ Baixar CSV", data=df.to_csv(index=False).encode('utf-8'),
-                       file_name="historico_aviator.csv", mime="text/csv")
-
-    # Limpar histórico
-    if st.button("🗑️ Limpar Histórico"):
-        st.session_state.dados = []
-        st.success("Histórico apagado.")
-
-else:
-    st.info("Ainda não há rodadas registradas.")
+# Limpar Dados
+if st.button("Limpar Dados"):
+    st.session_state.valores = []
+    st.session_state.historico_completo = []
+    st.success("Dados limpos com sucesso!")
