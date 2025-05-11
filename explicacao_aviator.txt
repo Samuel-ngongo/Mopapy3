@@ -1,34 +1,4 @@
-
-Aviator IA - Explicação Técnica e Funcional
-
-1. Função principal:
-   - Previsão da próxima rodada com base em dados históricos do usuário.
-
-2. Lógicas aplicadas:
-   - Média simples dos últimos 10 dados.
-   - Média ponderada com mais peso para os últimos valores.
-   - Regressão Linear com Scikit-Learn.
-   - Sistema escolhe automaticamente a melhor estimativa.
-
-3. Detecção de mudança de padrão:
-   - A cada 5 novos dados, compara-se a média e o desvio padrão.
-   - Mudança brusca detectada quando as diferenças passam de limiares críticos.
-   - Exibe alerta visual: “Mudança de padrão DETECTADA!”
-
-4. Sistema de confiança:
-   - Baseado na variação (desvio padrão) dos últimos dados.
-   - Exibe intervalo de estimativa com percentual de chance de acerto.
-
-5. Aprendizado contínuo:
-   - Dados salvos em CSV local.
-   - IA continua a aprender entre sessões.
-
-6. Botões:
-   - “Limpar histórico”: apaga tudo e reinicia.
-   - “Ver total de registros”: mostra quantos dados estão salvos.
-
-7. Requisitos:
-   - Python, Streamlit, Pandas, Numpy, Scikit-Learn
-   - Rodar com: streamlit run aviator_ia.py
-
-Feito com inteligência adaptativa para prever padrões ocultos e reagir rapidamente a mudanças lógicas.
+streamlit
+scikit-learn
+pandas
+numpy
