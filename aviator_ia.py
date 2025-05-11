@@ -8,8 +8,8 @@ try:
 except ImportError:
     LinearRegression = None
 
-st.set_page_config(page_title="Aviator PRO - IA Adaptativa Total", layout="centered")
-st.title("Aviator PRO - IA Inteligente com Padrões, Confiança e Histórico")
+st.set_page_config(page_title="Aviator PRO - IA Avançada", layout="centered")
+st.title("Aviator PRO - IA Inteligente com Previsão Ampliada e Log Análise")
 
 # Histórico
 if "valores" not in st.session_state:
@@ -29,10 +29,10 @@ if st.button("Adicionar") and novo:
     except:
         st.error("Formato inválido.")
 
-# Previsão com IA híbrida
+# Função de previsão com aprimoramento
 def prever_valor(dados):
     if len(dados) < 5:
-        return 1.50, 30
+        return 1.50, 1.20, 30, 0.0  # estimativa, inferior, confiança, % variação
 
     media_simples = np.mean(dados)
     pesos = np.linspace(1, 2, len(dados))
@@ -48,20 +48,24 @@ def prever_valor(dados):
         reg_pred = media_ponderada
 
     estimativa_final = (media_simples + media_ponderada + reg_pred) / 3
+    estimativa_inferior = min(media_simples, media_ponderada, reg_pred)
+
     desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
     confianca = max(10, 100 - desvio * 100)
 
-    return round(estimativa_final, 2), round(confianca, 1)
+    # % variação esperada com base na tendência
+    variacao = ((estimativa_final - dados[-1]) / dados[-1]) * 100 if dados[-1] != 0 else 0
 
-# Detectar mudança brusca
+    return round(estimativa_final, 2), round(estimativa_inferior, 2), round(confianca, 1), round(variacao, 2)
+
+# Detectar mudança com logaritmo
 def detectar_mudanca(dados):
     if len(dados) < 15:
         return False
-    ultimos = np.array(dados[-5:])
-    anteriores = np.array(dados[-10:-5])
-    media_diff = abs(np.mean(ultimos) - np.mean(anteriores))
-    desvio_diff = abs(np.std(ultimos) - np.std(anteriores))
-    return media_diff > 1.0 or desvio_diff > 1.2
+    log_diff = np.diff(np.log(np.array(dados[-10:])))
+    if np.max(np.abs(log_diff)) > 0.5:
+        return True
+    return False
 
 # Analisar padrões
 def analisar_padroes(dados):
@@ -76,19 +80,15 @@ def analisar_padroes(dados):
             alertas.append(("Alternância instável", 60))
     return alertas
 
-# Visualização Interativa (Ponto 3)
+# Visualização
 def mostrar_graficos(valores):
     df = pd.DataFrame({
         'Índice': list(range(1, len(valores) + 1)),
         'Valor': valores
     })
 
-    # Cores por tipo
-    cores = ['red' if v < 1.5 else 'green' if v > 2.5 else 'gray' for v in valores]
-
     st.subheader("Mini Gráfico de Barras (últimos 10)")
-    ultimos_10 = df.tail(10)
-    st.bar_chart(ultimos_10.set_index('Índice'))
+    st.bar_chart(df.tail(10).set_index('Índice'))
 
     st.subheader("Evolução da Média")
     df['Média Móvel'] = df['Valor'].rolling(window=3, min_periods=1).mean()
@@ -104,19 +104,22 @@ if st.session_state.valores:
     mostrar_graficos(st.session_state.valores)
 
     st.subheader("Previsão e Análise Inteligente")
-    estimativa, confianca = prever_valor(st.session_state.valores)
-    st.info(f"Estimativa combinada para próxima rodada: {estimativa}x")
-    st.info(f"Nível de confiança: {confianca}%")
+    est, inf, conf, var = prever_valor(st.session_state.valores)
 
-    if confianca >= 75:
+    st.info(f"**Estimativa para próxima rodada:** {est}x")
+    st.info(f"**Estimativa inferior (segura):** {inf}x")
+    st.info(f"**Confiança da IA:** {conf}%")
+    st.info(f"**Variação esperada:** {var}%")
+
+    if conf >= 75:
         st.success("Alta confiança nas próximas rodadas.")
-    elif confianca >= 50:
+    elif conf >= 50:
         st.warning("Confiança moderada. Observe antes de agir.")
     else:
         st.error("Confiança baixa. Alta incerteza.")
 
     if detectar_mudanca(st.session_state.valores):
-        st.warning("Mudança brusca de padrão detectada. IA recalibrando...")
+        st.warning("Mudança brusca identificada pelo logaritmo. IA ajustando previsão...")
 
     padroes = analisar_padroes(st.session_state.valores)
     for alerta, chance in padroes:
