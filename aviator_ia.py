@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 from datetime import datetime
+import pandas as pd
 
 try:
     from sklearn.linear_model import LinearRegression
@@ -33,14 +34,10 @@ def prever_valor(dados):
     if len(dados) < 5:
         return 1.50, 30
 
-    # Média simples
     media_simples = np.mean(dados)
-
-    # Média ponderada
     pesos = np.linspace(1, 2, len(dados))
     media_ponderada = np.average(dados, weights=pesos)
 
-    # Regressão Linear
     if LinearRegression and len(dados) >= 6:
         X = np.array(range(len(dados))).reshape(-1, 1)
         y = np.array(dados)
@@ -48,12 +45,9 @@ def prever_valor(dados):
         modelo.fit(X, y)
         reg_pred = modelo.predict(np.array([[len(dados) + 1]]))[0]
     else:
-        reg_pred = media_ponderada  # fallback
+        reg_pred = media_ponderada
 
-    # Combinar previsões
     estimativa_final = (media_simples + media_ponderada + reg_pred) / 3
-
-    # Confiança
     desvio = np.std(dados[-10:]) if len(dados) >= 10 else np.std(dados)
     confianca = max(10, 100 - desvio * 100)
 
@@ -82,11 +76,32 @@ def analisar_padroes(dados):
             alertas.append(("Alternância instável", 60))
     return alertas
 
+# Visualização Interativa (Ponto 3)
+def mostrar_graficos(valores):
+    df = pd.DataFrame({
+        'Índice': list(range(1, len(valores) + 1)),
+        'Valor': valores
+    })
+
+    # Cores por tipo
+    cores = ['red' if v < 1.5 else 'green' if v > 2.5 else 'gray' for v in valores]
+
+    st.subheader("Mini Gráfico de Barras (últimos 10)")
+    ultimos_10 = df.tail(10)
+    st.bar_chart(ultimos_10.set_index('Índice'))
+
+    st.subheader("Evolução da Média")
+    df['Média Móvel'] = df['Valor'].rolling(window=3, min_periods=1).mean()
+    st.line_chart(df.set_index('Índice')[['Valor', 'Média Móvel']])
+
 # Exibir histórico e análise
 if st.session_state.valores:
     st.subheader("Histórico (últimos 30)")
     for valor, data in st.session_state.historico_completo[-30:]:
-        st.write(f"{valor:.2f}x - {data}")
+        cor = "🟥" if valor < 1.5 else "🟩" if valor > 2.5 else "⬜"
+        st.write(f"{cor} {valor:.2f}x - {data}")
+
+    mostrar_graficos(st.session_state.valores)
 
     st.subheader("Previsão e Análise Inteligente")
     estimativa, confianca = prever_valor(st.session_state.valores)
